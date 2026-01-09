@@ -292,11 +292,16 @@ export interface RequestLogData {
 
 export function logRequest(data: RequestLogData, userAgent: string | null): void {
   try {
+    const config = getConfig();
     const logger = getLogger();
 
     // Safety: Never log content if secrets were detected
     // Even if log_content is true, secrets are never logged
     const shouldLogContent = data.maskedContent && !data.secretsDetected;
+
+    // Only log secret types if configured to do so
+    const shouldLogSecretTypes =
+      config.secrets_detection.log_detected_types && data.secretsTypes?.length;
 
     logger.log({
       timestamp: data.timestamp,
@@ -315,7 +320,7 @@ export function logRequest(data: RequestLogData, userAgent: string | null): void
       detected_language: data.detectedLanguage ?? null,
       masked_content: shouldLogContent ? (data.maskedContent ?? null) : null,
       secrets_detected: data.secretsDetected !== undefined ? (data.secretsDetected ? 1 : 0) : null,
-      secrets_types: data.secretsTypes?.join(",") ?? null,
+      secrets_types: shouldLogSecretTypes ? data.secretsTypes!.join(",") : null,
     });
   } catch (error) {
     console.error("Failed to log request:", error);
