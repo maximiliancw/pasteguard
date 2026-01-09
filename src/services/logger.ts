@@ -84,6 +84,15 @@ export class Logger {
       )
     `);
 
+    // Migrate existing databases: add secrets columns if missing
+    const columns = this.db.prepare("PRAGMA table_info(request_logs)").all() as Array<{
+      name: string;
+    }>;
+    if (!columns.find((c) => c.name === "secrets_detected")) {
+      this.db.run("ALTER TABLE request_logs ADD COLUMN secrets_detected INTEGER");
+      this.db.run("ALTER TABLE request_logs ADD COLUMN secrets_types TEXT");
+    }
+
     // Create indexes for performance
     this.db.run(`
       CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs(timestamp)
