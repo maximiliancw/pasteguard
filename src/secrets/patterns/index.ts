@@ -1,5 +1,6 @@
 import type { PatternDetector } from "./types";
 import { apiKeysDetector } from "./api-keys";
+import { envVarsDetector } from "./env-vars";
 import { privateKeysDetector } from "./private-keys";
 import { tokensDetector } from "./tokens";
 
@@ -13,6 +14,7 @@ export const patternDetectors: PatternDetector[] = [
   privateKeysDetector,
   apiKeysDetector,
   tokensDetector,
+  envVarsDetector,
 ];
 
 // Re-export types and utilities for convenience
