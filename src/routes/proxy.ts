@@ -21,16 +21,19 @@ import type {
 import { logRequest, type RequestLogData } from "../services/logger";
 import { unmaskResponse } from "../services/masking";
 import { createUnmaskingStream } from "../services/stream-transformer";
+import { type ContentPart, extractTextContent } from "../utils/content";
 
 // Request validation schema
 const ChatCompletionSchema = z
   .object({
     messages: z
       .array(
-        z.object({
-          role: z.enum(["system", "user", "assistant"]),
-          content: z.string(),
-        }),
+        z
+          .object({
+            role: z.enum(["system", "user", "assistant", "tool"]),
+            content: z.union([z.string(), z.array(z.any()), z.null()]).optional(),
+          })
+          .passthrough(), // Allow additional fields like name, tool_calls, etc.
       )
       .min(1, "At least one message is required"),
   })
@@ -185,7 +188,8 @@ function redactMessagesWithSecrets(
   const messagePositions: { start: number; end: number }[] = [];
 
   for (const msg of messages) {
-    const length = typeof msg.content === "string" ? msg.content.length : 0;
+    const text = extractTextContent(msg.content);
+    const length = text.length;
     messagePositions.push({ start: currentOffset, end: currentOffset + length });
     currentOffset += length + 1; // +1 for \n separator
   }
@@ -199,7 +203,69 @@ function redactMessagesWithSecrets(
 
   // Apply redactions to each message
   const redactedMessages = messages.map((msg, i) => {
-    if (typeof msg.content !== "string" || !msg.content) {
+    // Handle null/undefined content
+    if (!msg.content) {
+      return msg;
+    }
+
+    // Handle array content (multimodal messages)
+    if (Array.isArray(msg.content)) {
+      const msgPos = messagePositions[i];
+
+      // Filter redactions for this message
+      const messageRedactions = (secretsResult.redactions || [])
+        .filter((r) => r.start >= msgPos.start && r.end <= msgPos.end)
+        .map((r) => ({
+          ...r,
+          start: r.start - msgPos.start,
+          end: r.end - msgPos.start,
+        }));
+
+      if (messageRedactions.length === 0) {
+        return msg;
+      }
+
+      // Track offset position within the concatenated text for this message
+      // (matches how extractTextContent joins parts with \n)
+      let partOffset = 0;
+      
+      // Redact only text parts of array content with proper offset tracking
+      const redactedContent = msg.content.map((part: ContentPart) => {
+        if (part.type === "text" && typeof part.text === "string") {
+          const partLength = part.text.length;
+          
+          // Find redactions that apply to this specific part
+          const partRedactions = messageRedactions
+            .filter((r) => r.start < partOffset + partLength && r.end > partOffset)
+            .map((r) => ({
+              ...r,
+              start: Math.max(0, r.start - partOffset),
+              end: Math.min(partLength, r.end - partOffset),
+            }));
+          
+          if (partRedactions.length > 0) {
+            const { redacted, context: updatedContext } = redactSecrets(
+              part.text,
+              partRedactions,
+              config,
+              context,
+            );
+            context = updatedContext;
+            partOffset += partLength + 1; // +1 for \n separator
+            return { ...part, text: redacted };
+          }
+          
+          partOffset += partLength + 1; // +1 for \n separator
+          return part;
+        }
+        return part;
+      });
+
+      return { ...msg, content: redactedContent };
+    }
+
+    // Handle string content (text-only messages)
+    if (typeof msg.content !== "string") {
       return msg;
     }
 
@@ -454,5 +520,11 @@ function createLogData(
  * Format messages for logging
  */
 function formatMessagesForLog(messages: ChatMessage[]): string {
-  return messages.map((m) => `[${m.role}] ${m.content}`).join("\n");
+  return messages
+    .map((m) => {
+      const text = extractTextContent(m.content);
+      const isMultimodal = Array.isArray(m.content);
+      return `[${m.role}${isMultimodal ? " multimodal" : ""}] ${text}`;
+    })
+    .join("\n");
 }

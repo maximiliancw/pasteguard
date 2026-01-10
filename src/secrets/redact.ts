@@ -1,5 +1,6 @@
 import type { SecretsDetectionConfig } from "../config";
 import type { ChatCompletionResponse, ChatMessage } from "../services/llm-client";
+import { extractTextContent } from "../utils/content";
 import type { SecretsRedaction } from "./detect";
 
 /**
@@ -143,8 +144,12 @@ export function redactMessagesSecrets(
 
   const redacted = messages.map((msg, i) => {
     const redactions = redactionsByMessage[i] || [];
-    const { redacted: redactedContent } = redactSecrets(msg.content, redactions, config, context);
-    return { ...msg, content: redactedContent };
+    const text = extractTextContent(msg.content);
+    const { redacted: redactedContent } = redactSecrets(text, redactions, config, context);
+
+    // If original content was a string, return redacted string
+    // Otherwise return original content (arrays are handled in proxy.ts)
+    return { ...msg, content: typeof msg.content === "string" ? redactedContent : msg.content };
   });
 
   return { redacted, context };
@@ -218,7 +223,10 @@ export function unredactResponse(
       ...choice,
       message: {
         ...choice.message,
-        content: unredactSecrets(choice.message.content, context),
+        content:
+          typeof choice.message.content === "string"
+            ? unredactSecrets(choice.message.content, context)
+            : choice.message.content,
       },
     })),
   };

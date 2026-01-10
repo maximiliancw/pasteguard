@@ -1,11 +1,13 @@
 import type { LocalProvider, UpstreamProvider } from "../config";
+import type { MessageContent } from "../utils/content";
 
 /**
  * OpenAI-compatible message format
+ * Supports both text-only (content: string) and multimodal (content: array) formats
  */
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: MessageContent;
 }
 
 /**

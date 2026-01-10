@@ -1,5 +1,6 @@
 import type { SecretsDetectionConfig } from "../config";
 import type { ChatCompletionRequest } from "../services/llm-client";
+import { extractTextContent } from "../utils/content";
 
 /**
  * All supported secret entity types
@@ -34,14 +35,14 @@ export interface SecretsDetectionResult {
  * Extracts all text content from an OpenAI chat completion request
  *
  * Concatenates content from all messages (system, user, assistant) for secrets scanning.
- * The proxy validation ensures content is always a string, so we can safely access it directly.
+ * Handles both string content (text-only) and array content (multimodal messages).
  *
  * Returns concatenated text for secrets scanning.
  */
 export function extractTextFromRequest(body: ChatCompletionRequest): string {
   return body.messages
-    .map((message) => message.content)
-    .filter((content): content is string => typeof content === "string" && content.length > 0)
+    .map((message) => extractTextContent(message.content))
+    .filter((text) => text.length > 0)
     .join("\n");
 }
 

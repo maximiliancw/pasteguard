@@ -1,4 +1,5 @@
 import { getConfig } from "../config";
+import { extractTextContent, type MessageContent } from "../utils/content";
 import {
   getLanguageDetector,
   type LanguageDetectionResult,
@@ -82,7 +83,7 @@ export class PIIDetector {
   }
 
   async analyzeMessages(
-    messages: Array<{ role: string; content: string }>,
+    messages: Array<{ role: string; content: MessageContent }>,
   ): Promise<PIIDetectionResult> {
     const startTime = Date.now();
 
@@ -100,7 +101,7 @@ export class PIIDetector {
       };
     }
 
-    const text = messages[lastUserIndex].content;
+    const text = extractTextContent(messages[lastUserIndex].content);
     const langResult = getLanguageDetector().detect(text);
     const newEntities = await this.detectPII(text, langResult.language);
 
@@ -118,17 +119,18 @@ export class PIIDetector {
   }
 
   async analyzeAllMessages(
-    messages: Array<{ role: string; content: string }>,
+    messages: Array<{ role: string; content: MessageContent }>,
     langResult: LanguageDetectionResult,
   ): Promise<PIIDetectionResult> {
     const startTime = Date.now();
 
     const entitiesByMessage = await Promise.all(
-      messages.map((message) =>
-        message.content && (message.role === "user" || message.role === "assistant")
-          ? this.detectPII(message.content, langResult.language)
-          : Promise.resolve([]),
-      ),
+      messages.map((message) => {
+        const text = extractTextContent(message.content);
+        return text && (message.role === "user" || message.role === "assistant")
+          ? this.detectPII(text, langResult.language)
+          : Promise.resolve([]);
+      }),
     );
 
     return {
