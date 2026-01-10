@@ -59,11 +59,14 @@ Additional entity types can be enabled: `US_SSN`, `US_PASSPORT`, `CRYPTO`, `NRP`
 | AWS access keys      | `AKIA...` (20 chars)                                                                                      |
 | GitHub tokens        | `ghp_...`, `gho_...`, `ghu_...`, `ghs_...`, `ghr_...`                                                      |
 | JWT tokens           | `eyJ...` (three base64 segments)                                                                          |
-| Bearer tokens        | `Bearer ...` (20+ char tokens)                                                                            |
+| Bearer tokens        | `Bearer ...` (40+ char tokens)                                                                            |
+| Env passwords        | `DB_PASSWORD=...`, `ADMIN_PWD=...` (8+ char values)                                                       |
+| Env secrets          | `APP_SECRET=...`, `JWT_SECRET=...` (8+ char values)                                                       |
+| Connection strings   | `postgres://user:pass@host`, `mysql://...`, `mongodb://...`, `redis://...`                                |
 
 Secrets detection runs **before** PII detection. Three actions available:
-- **block** (default): Returns HTTP 400, request never reaches LLM
-- **redact**: Replaces secrets with placeholders, unredacts in response (reversible)
+- **redact** (default): Replaces secrets with placeholders, unredacts in response (reversible)
+- **block**: Returns HTTP 400, request never reaches LLM
 - **route_local**: Routes to local LLM (route mode only)
 
 Detected secrets are never logged in their original form.
@@ -198,7 +201,7 @@ pii_detection:
 ```yaml
 secrets_detection:
   enabled: true # Enable secrets detection
-  action: block # block | redact | route_local
+  action: redact # redact | block | route_local
   entities: # Secret types to detect
     - OPENSSH_PRIVATE_KEY
     - PEM_PRIVATE_KEY
@@ -209,12 +212,16 @@ secrets_detection:
     # Tokens (opt-in):
     # - JWT_TOKEN
     # - BEARER_TOKEN
+    # Environment Variables (opt-in):
+    # - ENV_PASSWORD
+    # - ENV_SECRET
+    # - CONNECTION_STRING
   max_scan_chars: 200000 # Performance limit (0 = no limit)
   log_detected_types: true # Log types (never logs content)
 ```
 
-- **block** (default): Returns HTTP 400 error, request never reaches LLM
-- **redact**: Replaces secrets with placeholders, unredacts in response (reversible, like PII masking)
+- **redact** (default): Replaces secrets with placeholders, unredacts in response (reversible, like PII masking)
+- **block**: Returns HTTP 400 error, request never reaches LLM
 - **route_local**: Routes to local provider when secrets detected (requires route mode)
 
 **Logging options:**
